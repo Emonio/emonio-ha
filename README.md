@@ -14,7 +14,7 @@ This repository contains the code for integrating the Emonio P3 three-phase powe
 
 ## Overview
 
-AThis project provides a custom component for Home Assistant that integrates Emonio P3 devices using the Modbus protocol. The integration is managed through Home Assistant Community Store (HACS) to facilitate easy installation and updates.
+This project provides a custom component for Home Assistant that integrates Emonio P3 devices using the Modbus protocol. The integration is managed through Home Assistant Community Store (HACS) to facilitate easy installation and updates.
 
 ## Installation
 
