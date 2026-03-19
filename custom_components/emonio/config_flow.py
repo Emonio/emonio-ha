@@ -48,7 +48,7 @@ class EmonioModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         port = user_input["port"]
 
         def connect_client():
-            client = ModbusTcpClient(host=host, port=port)
+            client = ModbusTcpClient(host, port=port)
             connected = client.connect()
             client.close()
             return connected

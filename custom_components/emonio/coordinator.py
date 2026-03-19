@@ -1,12 +1,11 @@
 import logging
+import struct
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pymodbus.client import ModbusTcpClient
-from pymodbus.constants import Endian
-from pymodbus.payload import BinaryPayloadDecoder
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,6 +13,12 @@ SCAN_INTERVAL = timedelta(seconds=30)
 
 PHASE_OFFSETS = [0, 100, 200, 300]
 REGISTERS_PER_PHASE = 16
+
+
+def _decode_float32_le(regs: list[int]) -> float:
+    """Decode two 16-bit registers as a little-endian word order float32."""
+    packed = struct.pack("<HH", regs[0], regs[1])
+    return struct.unpack("<f", packed)[0]
 
 
 class EmonioCoordinator(DataUpdateCoordinator[dict[int, float]]):
@@ -28,7 +33,7 @@ class EmonioCoordinator(DataUpdateCoordinator[dict[int, float]]):
         )
         self._host = entry.data["host"]
         self._port = entry.data.get("port", 502)
-        self._client = ModbusTcpClient(host=self._host, port=self._port)
+        self._client = ModbusTcpClient(self._host, port=self._port)
 
     def _read_all_registers(self) -> dict[int, float]:
         """Read all phase registers from the Modbus device."""
@@ -39,20 +44,17 @@ class EmonioCoordinator(DataUpdateCoordinator[dict[int, float]]):
         data: dict[int, float] = {}
         for phase_offset in PHASE_OFFSETS:
             result = self._client.read_holding_registers(
-                phase_offset, REGISTERS_PER_PHASE, slave=1
+                phase_offset, count=REGISTERS_PER_PHASE
             )
             if result.isError():
                 raise UpdateFailed(
                     f"Modbus error reading registers at offset {phase_offset}"
                 )
             for i in range(0, REGISTERS_PER_PHASE, 2):
-                regs = list(result.registers[i : i + 2])
-                regs.reverse()
-                decoder = BinaryPayloadDecoder.fromRegisters(
-                    regs, byteorder=Endian.BIG, wordorder=Endian.BIG
-                )
                 address = phase_offset + i
-                data[address] = round(decoder.decode_32bit_float(), 2)
+                data[address] = round(
+                    _decode_float32_le(result.registers[i : i + 2]), 2
+                )
         return data
 
     async def _async_update_data(self) -> dict[int, float]:

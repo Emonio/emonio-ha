@@ -61,7 +61,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         identifiers={(DOMAIN, mac_suffix)},
         name=f"Emonio P3 {mac_suffix}",
         model="Emonio P3",
-        manufacturer="Berliner Energie Institut",
+        manufacturer="Emonio GmbH",
     )
 
     sensors = []
