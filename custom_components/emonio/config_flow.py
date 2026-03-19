@@ -1,34 +1,41 @@
-from homeassistant import config_entries
-import voluptuous as vol
 import ipaddress
-from pymodbus.client.sync import ModbusTcpClient
-from scapy.all import ARP, Ether, srp
+import logging
+import subprocess
+
+import voluptuous as vol
+from homeassistant import config_entries
+from pymodbus.client import ModbusTcpClient
 
 from .const import DOMAIN
 
-def validate_ip(value):
-    """Validate if the value is a valid IP address."""
+_LOGGER = logging.getLogger(__name__)
+
+
+def _get_mac_address(ip_addr):
+    """Get the MAC address of a device by IP using ARP."""
     try:
-        ipaddress.ip_address(value)
-        return value
-    except ValueError:
-        raise vol.Invalid("Invalid IP address")
-
-def get_mac_address(ip_address):
-    """Get the MAC address of a device by IP address."""
-    try:
-        arp_request = ARP(pdst=ip_address)
-        broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")
-        arp_request_broadcast = broadcast / arp_request
-        answered_list = srp(arp_request_broadcast, timeout=1, verbose=False)[0]
-
-        for sent, received in answered_list:
-            return received.hwsrc
-
+        result = subprocess.run(
+            ["arp", "-n", ip_addr],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.split("\n"):
+            if ip_addr in line:
+                return line.split()[2]
         return None
     except Exception as e:
-        _LOGGER.error(f"Error getting MAC address for {ip_address}: {e}")
+        _LOGGER.error("Error getting MAC address for %s: %s", ip_addr, e)
         return None
+
+
+DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required("host"): str,
+        vol.Required("port", default=502): int,
+    }
+)
+
 
 class EmonioModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Emonio Modbus."""
@@ -40,60 +47,45 @@ class EmonioModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Validate the IP address here
             try:
-                validate_ip(user_input['host'])
-                return await self.async_step_test_connection(user_input)
-            except vol.Invalid:
-                errors["host"] = "Invalid IP address. Check your Emonio IP."
-
-        # Define the data schema with a legend and IP validation
-        data_schema = vol.Schema(
-            {
-                vol.Required("host", description="Emonio IP"): str,
-                vol.Required("port", default=502, description="Modbus Port"): int,
-            }
-        )
+                ipaddress.ip_address(user_input["host"])
+            except ValueError:
+                errors["host"] = "invalid_ip"
+            else:
+                return await self._async_test_connection(user_input)
 
         return self.async_show_form(
             step_id="user",
-            data_schema=data_schema,
+            data_schema=DATA_SCHEMA,
             errors=errors,
         )
 
-    async def async_step_test_connection(self, user_input):
+    async def _async_test_connection(self, user_input):
         """Test the connection to the Modbus device."""
         errors = {}
-        host = user_input['host']
-        port = user_input['port']
+        host = user_input["host"]
+        port = user_input["port"]
 
         def connect_client():
-            client = ModbusTcpClient(host, port)
-            connection_result = client.connect()
+            client = ModbusTcpClient(host=host, port=port)
+            connected = client.connect()
             client.close()
-            return connection_result
+            return connected
 
-        def fetch_mac_address():
-            return get_mac_address(host)
-
-        connection_result = await self.hass.async_add_executor_job(connect_client)
-        if connection_result:
-            mac_address = await self.hass.async_add_executor_job(fetch_mac_address)
+        connected = await self.hass.async_add_executor_job(connect_client)
+        if connected:
+            mac_address = await self.hass.async_add_executor_job(_get_mac_address, host)
             if mac_address:
-                mac_suffix = mac_address.replace(':', '')[-6:].upper()
-                return self.async_create_entry(title=f"Emonio P3 {mac_suffix}", data=user_input)
-            else:
-                errors["base"] = "Could not get MAC address. Ensure the device is reachable."
+                mac_suffix = mac_address.replace(":", "")[-6:].upper()
+                return self.async_create_entry(
+                    title=f"Emonio P3 {mac_suffix}", data=user_input
+                )
+            errors["base"] = "cannot_get_mac"
         else:
-            errors["base"] = "Connection was not possible. Ensure Modbus server is enabled."
+            errors["base"] = "cannot_connect"
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("host", description="Emonio IP"): str,
-                    vol.Required("port", default=502, description="Modbus Port"): int,
-                }
-            ),
+            data_schema=DATA_SCHEMA,
             errors=errors,
         )

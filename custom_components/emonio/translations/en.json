@@ -7,6 +7,11 @@
           "port": "Modbus Port"
         }
       }
+    },
+    "error": {
+      "invalid_ip": "Invalid IP address. Check your Emonio IP.",
+      "cannot_connect": "Connection failed. Ensure Modbus server is enabled.",
+      "cannot_get_mac": "Could not determine MAC address. Ensure the device is reachable."
     }
   }
 }
