@@ -1,33 +1,14 @@
 import ipaddress
 import logging
-import subprocess
 
 import voluptuous as vol
 from homeassistant import config_entries
 from pymodbus.client import ModbusTcpClient
 
 from .const import DOMAIN
+from .helpers import get_mac_address
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _get_mac_address(ip_addr):
-    """Get the MAC address of a device by IP using ARP."""
-    try:
-        result = subprocess.run(
-            ["arp", "-n", ip_addr],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode != 0:
-            return None
-        for line in result.stdout.split("\n"):
-            if ip_addr in line:
-                return line.split()[2]
-        return None
-    except Exception as e:
-        _LOGGER.error("Error getting MAC address for %s: %s", ip_addr, e)
-        return None
-
 
 DATA_SCHEMA = vol.Schema(
     {
@@ -74,9 +55,11 @@ class EmonioModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         connected = await self.hass.async_add_executor_job(connect_client)
         if connected:
-            mac_address = await self.hass.async_add_executor_job(_get_mac_address, host)
+            mac_address = await self.hass.async_add_executor_job(get_mac_address, host)
             if mac_address:
                 mac_suffix = mac_address.replace(":", "")[-6:].upper()
+                await self.async_set_unique_id(mac_suffix)
+                self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=f"Emonio P3 {mac_suffix}", data=user_input
                 )

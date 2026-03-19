@@ -1,127 +1,55 @@
-# Emonio Modbus Integration for Home Assistant
+# Emonio P3 Integration for Home Assistant
 
-This repository contains the code for integrating the Emonio P3 three-phase power measuring device with Home Assistant using the Modbus protocol. The Emonio P3 is designed to determine the power consumption of house connection points, main and sub distribution points, devices, and systems. It is particularly suitable for mobile and temporary measurement of 1-phase and 3-phase AC power, providing quick and precise measuring results and easy connection to any distribution cabinet.
+Custom [Home Assistant](https://www.home-assistant.io/) integration for the [Emonio P3](https://www.emonio.de/) three-phase power measuring device using Modbus TCP.
 
-## Table of Contents
+## Features
 
-- [Overview](#overview)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
-
-## Overview
-
-This project provides a custom component for Home Assistant that integrates Emonio P3 devices using the Modbus protocol. The integration is managed through Home Assistant Community Store (HACS) to facilitate easy installation and updates.
+- Automatic device discovery via config flow (UI-based setup)
+- 32 sensors: 4 phases (A, B, C, Total) x 8 measurements each:
+  - Voltage, Current, Power, Reactive Power, Apparent Power, Frequency, Energy, Power Factor
+- Efficient batched Modbus polling via `DataUpdateCoordinator`
 
 ## Installation
 
-### Prerequisites
+### Via HACS (recommended)
 
-- Home Assistant installed and running.
-- HACS (Home Assistant Community Store) installed.
+1. Open HACS in your Home Assistant instance.
+2. Go to **Integrations** and click the three-dot menu.
+3. Select **Custom repositories** and add this repository URL with category **Integration**.
+4. Search for "Emonio P3" and install it.
+5. Restart Home Assistant.
 
-### Steps
+### Manual
 
-1. **Clone the repository:**
-
-    ```sh
-    git clone https://github.com/andsk8/emonio-test.git
-    ```
-
-2. **Add the custom component to Home Assistant:**
-
-    Copy the `emonio_modbus` directory to your Home Assistant `custom_components` directory:
-
-    ```sh
-    cp -r emonio-test/emonio_modbus /path/to/your/home-assistant/config/custom_components/
-    ```
-
-3. **Restart Home Assistant:**
-
-    Restart Home Assistant to recognize the new custom component.
+1. Copy the `custom_components/emonio` directory into your Home Assistant `config/custom_components/` directory.
+2. Restart Home Assistant.
 
 ## Configuration
 
-### Setup in Home Assistant
-
-1. **Add Emonio Modbus integration:**
-
-    In your `configuration.yaml` file, add the following configuration:
-
-    ```yaml
-    modbus:
-      - name: emonio
-        type: tcp
-        host: YOUR_EMONIO_IP_ADDRESS
-        port: 502
-        sensors:
-          - name: Emonio Voltage Phase 1
-            unit_of_measurement: "V"
-            address: 0
-            input_type: input
-            data_type: int16
-          - name: Emonio Voltage Phase 2
-            unit_of_measurement: "V"
-            address: 1
-            input_type: input
-            data_type: int16
-          - name: Emonio Voltage Phase 3
-            unit_of_measurement: "V"
-            address: 2
-            input_type: input
-            data_type: int16
-          - name: Emonio Current Phase 1
-            unit_of_measurement: "A"
-            address: 3
-            input_type: input
-            data_type: int16
-          - name: Emonio Current Phase 2
-            unit_of_measurement: "A"
-            address: 4
-            input_type: input
-            data_type: int16
-          - name: Emonio Current Phase 3
-            unit_of_measurement: "A"
-            address: 5
-            input_type: input
-            data_type: int16
-          - name: Emonio Power Consumption
-            unit_of_measurement: "W"
-            address: 6
-            input_type: input
-            data_type: int32
-    ```
-
-    Adjust the addresses and data types according to your specific Modbus register map for the Emonio P3 device.
-
-2. **Reload configuration:**
-
-    Reload your Home Assistant configuration to apply the new settings.
+1. Go to **Settings** > **Devices & Services** > **Add Integration**.
+2. Search for "Emonio P3".
+3. Enter the IP address of your Emonio device and the Modbus port (default: 502).
+4. The integration will test the connection and set up all sensors automatically.
 
 ## Usage
 
-### Viewing Sensors
-
-After configuring the integration, your Emonio sensors should be available in Home Assistant. You can view them in the Home Assistant dashboard under the `Entities` section.
-
-### Automations and Scripts
-
-You can create automations and scripts in Home Assistant to react to the data from your Emonio sensors. For example, you can create an automation to turn off a device if the power consumption exceeds a certain threshold.
-
-Example automation:
+After setup, 32 sensor entities are created under a single Emonio P3 device. You can add them to dashboards or use them in automations:
 
 ```yaml
 automation:
-  - alias: Turn off device on high power consumption
+  - alias: Alert on high power consumption
     trigger:
       platform: numeric_state
-      entity_id: sensor.emonio_power_consumption
+      entity_id: sensor.emonio_xxxxxx_total_power
       above: 5000
     action:
-      service: switch.turn_off
-      target:
-        entity_id: switch.your_device
+      service: notify.notify
+      data:
+        message: "Power consumption exceeded 5000W"
+```
 
+## Requirements
+
+- Home Assistant 2024.1 or later
+- Emonio P3 device with Modbus TCP enabled
+- Network connectivity between Home Assistant and Emonio device
